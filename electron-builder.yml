@@ -1,0 +1,82 @@
+# electron-builder config for dsh-desktop
+# Produces a Windows NSIS installer that bundles the dsh engine + portable node.
+# See pack-engine.mjs for how resources/engine/ is populated before this runs.
+
+appId: com.deepseek.dsh-desktop
+productName: DeepSeek Harness
+copyright: Copyright © 2026
+afterPack: scripts/after-pack.mjs
+
+# The compiled main/preload land here; renderer loader.html alongside.
+directories:
+  output: release
+  buildResources: build
+
+# Ship the TS-compiled main + the loader html + production deps (electron-updater).
+# electron-builder auto-includes `dependencies` from package.json; devDependencies
+# are excluded. The engine tree is NOT a node_module — it goes to extraResources.
+files:
+  - dist/**/*
+  - build/tray.png
+  - package.json
+
+# The engine ships as a SINGLE 7z archive + portable node (extracted on first
+# run to userData/dsh-runtime). Packaging a real tree of ~200k dependency files
+# stalls NSIS/7za for 40+ min and multi-GB RAM; one archive packages in seconds.
+# The extractor (7za.exe) ships inside app node_modules, which electron-builder
+# keeps out of asar via asarUnpack below.
+extraResources:
+  - from: engine/runtime.7z
+    to: engine/runtime.7z
+  - from: engine/node/
+    to: engine/node/
+  - from: engine/tools/
+    to: engine/tools/
+  - from: engine/VERSION
+    to: engine/VERSION
+
+# Generate update blockmaps for delta updates.
+generateUpdatesFilesForAllChannels: true
+
+# Fast packaging for this large bundled runtime. This is a root-level
+# electron-builder option, not an NSIS sub-option.
+compression: store
+
+win:
+  icon: build/icon.ico
+  target:
+    - target: nsis
+      arch: [x64]
+  # Signing: set CSC_LINK / CSC_KEY_PASSWORD env to sign; unsigned builds still
+  # install but trigger SmartScreen until reputation accrues.
+  # signAndEditExecutable=false skips winCodeSign (whose 7z contains macOS dylib
+  # symlinks that 7za cannot create without Windows symlink privilege). We don't
+  # sign, so rcedit/version-stamping is unnecessary for a working installer.
+  signAndEditExecutable: false
+  # No spaces in artifact names: GitHub replaces spaces with dots in release
+  # asset names, which breaks the latest.yml download URL (404 on update).
+  # ${name} is the package name "dsh-desktop"; use a clean literal instead.
+  artifactName: DeepSeek.Harness-${version}-${arch}-setup.${ext}
+
+nsis:
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: DeepSeek Harness
+  # Run after install auto-launches the app the first time.
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
+
+# Auto-update via GitHub Releases. electron-builder embeds the repo into
+# app-update.yml; electron-updater reads latest.yml from the release assets.
+publish:
+  provider: github
+  owner: Jack-Mayl
+  repo: dsh-desktop-releases
+  releaseType: release
+  channel: latest

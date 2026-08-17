@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self' 'unsafe-inline'">
+<title>DeepSeek Harness</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; width: 100%; overflow: hidden; }
+  body {
+    background: radial-gradient(ellipse at top, #1e1e2e 0%, #0d0d12 60%, #000 100%);
+    color: #e4e4e7;
+    font-family: -apple-system, "Segoe UI", "Microsoft YaHei", system-ui, sans-serif;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+  }
+  .logo { width: 88px; height: 88px; margin-bottom: 28px; position: relative; }
+  .logo .mark {
+    width: 100%; height: 100%; border-radius: 22px;
+    background: linear-gradient(135deg, #4d6bfe 0%, #2a3fa0 100%);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 44px; font-weight: 700; color: #fff;
+    box-shadow: 0 8px 40px rgba(77,107,254,0.35);
+  }
+  .logo .pulse {
+    position: absolute; inset: -6px; border-radius: 28px;
+    border: 2px solid rgba(77,107,254,0.4);
+    animation: pulse 1.8s ease-out infinite;
+  }
+  @keyframes pulse { 0% { transform: scale(0.92); opacity: 0.8; } 100% { transform: scale(1.15); opacity: 0; } }
+  h1 { font-size: 20px; font-weight: 600; margin-bottom: 6px; letter-spacing: 0.3px; }
+  .status {
+    font-size: 13px; color: #8b8b96; min-height: 20px;
+    display: flex; align-items: center; gap: 8px; margin-bottom: 24px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #f59e0b; animation: blink 1s ease infinite; }
+  .dot.running { background: #10b981; animation: none; }
+  .dot.error { background: #ef4444; animation: none; }
+  @keyframes blink { 50% { opacity: 0.3; } }
+  .log {
+    width: min(640px, 90vw); height: 180px; overflow-y: auto;
+    background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 10px; padding: 12px 14px;
+    font-family: "Cascadia Code", "Consolas", "SF Mono", monospace;
+    font-size: 11.5px; line-height: 1.6; color: #a1a1aa;
+  }
+  .log .line { white-space: pre-wrap; word-break: break-all; }
+  .log .line.err { color: #f87171; }
+  .progress { width: min(640px, 90vw); height: 3px; background: rgba(255,255,255,0.08); border-radius: 2px; margin-top: 20px; overflow: hidden; }
+  .progress .bar { height: 100%; width: 0%; background: linear-gradient(90deg, #4d6bfe, #7c9bff); transition: width 0.5s ease; }
+  .hint { margin-top: 18px; font-size: 11px; color: #52525b; }
+</style>
+</head>
+<body>
+  <div class="logo">
+    <div class="mark">DS</div>
+    <div class="pulse"></div>
+  </div>
+  <h1>DeepSeek Harness</h1>
+  <div class="status"><span class="dot" id="dot"></span><span id="state">正在启动本地引擎…</span></div>
+  <div class="log" id="log"></div>
+  <div class="progress"><div class="bar" id="bar"></div></div>
+  <div class="hint" id="hint">首次启动需要初始化配置，请稍候</div>
+
+<script>
+  const logEl = document.getElementById('log')
+  const stateEl = document.getElementById('state')
+  const dotEl = document.getElementById('dot')
+  const barEl = document.getElementById('bar')
+  const hintEl = document.getElementById('hint')
+
+  function addLog(line) {
+    const div = document.createElement('div')
+    div.className = 'line' + (/error|fail|crash/i.test(line) ? ' err' : '')
+    div.textContent = line
+    logEl.appendChild(div)
+    logEl.scrollTop = logEl.scrollHeight
+  }
+  function setState(s, msg) {
+    dotEl.className = 'dot ' + (s === 'running' ? 'running' : s === 'error' || s === 'crashed' ? 'error' : '')
+    stateEl.textContent = msg || ({
+      starting: '正在启动本地引擎…',
+      running:  '引擎就绪',
+      stopping: '正在停止引擎…',
+      crashed:  '引擎崩溃，正在处理…',
+      error:    '引擎启动失败',
+      stopped:  '引擎已停止',
+    })[s] || s
+  }
+
+  // Prefer the desktop bridge; fall back to no-op if not present (e.g. opened outside app).
+  const dsh = window.dsh
+  if (dsh && dsh.engine) {
+    dsh.engine.getLogs().then(logs => logs.forEach(addLog)).catch(() => {})
+    dsh.engine.getState().then(s => setState(s)).catch(() => {})
+    dsh.engine.onLog(addLog)
+    dsh.engine.onState(s => {
+      setState(s)
+      if (s === 'starting') barEl.style.width = '40%'
+      if (s === 'running') { barEl.style.width = '100%'; hintEl.textContent = '即将进入主界面' }
+      if (s === 'error' || s === 'crashed') hintEl.textContent = '请查看日志，或点击托盘「显示窗口」重试'
+    })
+    dsh.engine.onError(msg => hintEl.textContent = '错误：' + msg)
+  }
+
+  // Fake progress so the bar isn't frozen during the multi-second boot.
+  let p = 8
+  const t = setInterval(() => {
+    if (p < 90) { p += Math.random() * 7; barEl.style.width = p + '%' }
+  }, 400)
+  document.addEventListener('engine-running', () => clearInterval(t))
+</script>
+</body>
+</html>

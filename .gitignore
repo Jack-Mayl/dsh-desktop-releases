@@ -1,0 +1,28 @@
+# Build outputs
+dist/
+build/
+release/
+release-repo/
+
+# Bundled engine payloads (rebuilt from deepseek-harness via scripts/)
+engine/
+engine-hoisted/
+engine-hoisted-v2/
+engine-hoisted-v3/
+engine-hoisted-v5/
+engine-hoisted-v6/
+engine-hoisted-v7/
+engine-hoisted-v8/
+engine-runtime-complete/
+dsh-desktopenginedsh/
+
+# Vendored third-party layout source (cloned from anoslide/dsh-vscode-layout;
+# apply-vscode-layout.mjs re-fetches it, see script header)
+vscode-layout-src/
+
+# Dependencies
+node_modules/
+
+# OS
+Thumbs.db
+Desktop.ini
